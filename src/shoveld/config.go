@@ -73,7 +73,7 @@ func (h *AMQPHost) SetDefaults() {
 // ShovelSource represnets the source queue to read from.
 // Exchange is optional and indicates an exchange to which the queue should be bound.
 type ShovelSource struct {
-	AMQPHost
+	AMQPHost `yaml:",inline"`
 	Queue    string
 	Bindings []ShovelSourceBinding
 	Prefetch int
@@ -98,7 +98,7 @@ type ShovelSourceBinding struct {
 // ShovelSink represents the output of the shovel.
 // RoutingKey is optional and overrides a message's routing key if specified.
 type ShovelSink struct {
-	AMQPHost
+	AMQPHost   `yaml:",inline"`
 	Exchange   string
 	RoutingKey string
 }
