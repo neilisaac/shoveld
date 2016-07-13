@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"runtime"
 	"sync"
-	"os"
 )
 
 func OpenFile(filename string) io.Reader {
@@ -25,34 +25,34 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
-	
+
 	runtime.GOMAXPROCS(*threads)
-	
+
 	files := flag.Args()
 	if len(files) == 0 {
 		log.Fatal("no config files specified")
 		flag.Usage()
 		os.Exit(1)
 	}
-	
+
 	shovels := make([]ShovelConfig, len(files))
 	for i, f := range files {
 		shovels[i] = ParseShovel(OpenFile(f))
 	}
-	
+
 	var wg sync.WaitGroup
 	wg.Add(len(shovels))
-	
+
 	for _, shovel := range shovels {
 		log.Println("initializing", shovel.Name)
-		worker := Worker{Config: shovel}
+		worker := Worker{ShovelConfig: shovel}
 		worker.Init()
-		
+
 		go func() {
 			defer wg.Done()
 			worker.Work()
 		}()
 	}
-	
+
 	wg.Wait()
 }
