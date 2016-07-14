@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"log"
-	"sync"
 
 	"github.com/streadway/amqp"
 )
@@ -12,7 +11,9 @@ import (
 type Worker struct {
 	ShovelConfig
 	sourceConnection *amqp.Connection
+	sourceChannel    *amqp.Channel
 	sinkConnection   *amqp.Connection
+	sinkChannel      *amqp.Channel
 }
 
 func (w *Worker) initSource() {
@@ -29,7 +30,6 @@ func (w *Worker) initSource() {
 	if _, err := channel.QueueDeclare(w.Source.Queue, true, false, false, false, nil); err != nil {
 		log.Fatal(err)
 	}
-	defer channel.Close()
 
 	for _, binding := range w.Source.Bindings {
 		if binding.Exchange == "" {
@@ -43,9 +43,12 @@ func (w *Worker) initSource() {
 		}
 	}
 
-	channel.Qos(w.Source.Prefetch, w.Source.Prefetch, true)
+	if err := channel.Qos(w.Source.Prefetch, 0, false); err != nil {
+		log.Fatal(err)
+	}
 
 	w.sourceConnection = connection
+	w.sourceChannel = channel
 }
 
 func (w *Worker) initSink() {
@@ -58,57 +61,56 @@ func (w *Worker) initSink() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer channel.Close()
 
 	if err := channel.ExchangeDeclare(w.Sink.Exchange, "topic", true, false, false, false, nil); err != nil {
 		log.Fatal(err)
 	}
 
 	w.sinkConnection = connection
+	w.sinkChannel = channel
 }
 
 // Init initializes the worker's source and connections, and establishes bindings.
 func (w *Worker) Init() {
 	w.initSource()
 	w.initSink()
+	log.Println("init done")
 }
 
-// Work does the shoveling.
+// Work does the shoveling and handles reconnecting as needed.
 func (w *Worker) Work() {
-	var wg sync.WaitGroup
-	wg.Add(w.Concurrency)
+	for {
+		if w.sourceConnection == nil || w.sinkConnection == nil {
+			w.Init()
+		}
 
-	for i := 0; i < w.Concurrency; i++ {
-		go func() {
-			defer wg.Done()
-			err := w.doShoveling()
-			if err != nil {
-				log.Fatal(err)
-			}
-		}()
+		err := w.doShoveling()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		w.sourceConnection.Close()
+		w.sourceConnection = nil
+		w.sinkConnection.Close()
+		w.sinkConnection = nil
 	}
-
-	wg.Wait()
 }
 
 func (w *Worker) doShoveling() error {
 	// see https://godoc.org/github.com/streadway/amqp#example-Channel-Confirm-Bridge
 
-	source, err := w.sourceConnection.Channel()
-	if err != nil {
-		return err
-	}
-	defer source.Close()
-
-	sink, err := w.sinkConnection.Channel()
-	if err != nil {
-		return err
-	}
-	defer sink.Close()
+	source := w.sourceChannel
+	sink := w.sinkChannel
 
 	shovel, err := source.Consume(w.Source.Queue, w.Name, false, false, false, false, nil)
 	if err != nil {
+		log.Panic(err)
 		return err
+	}
+
+	confirms := sink.NotifyPublish(make(chan amqp.Confirmation, 1))
+	if err := sink.Confirm(false); err != nil {
+		log.Fatal(err)
 	}
 
 	for {
@@ -139,10 +141,14 @@ func (w *Worker) doShoveling() error {
 			Body:            msg.Body})
 
 		if err != nil {
-			msg.Nack(false, false)
-			return err
+			msg.Nack(false, true)
+			log.Panic(err)
 		}
 
-		msg.Ack(false)
+		if confirmed := <-confirms; confirmed.Ack {
+			msg.Ack(false)
+		} else {
+			msg.Nack(false, true)
+		}
 	}
 }
