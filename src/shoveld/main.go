@@ -45,13 +45,18 @@ func main() {
 
 	for _, shovel := range shovels {
 		log.Println("initializing", shovel.Name)
-		worker := Worker{ShovelConfig: shovel}
-		worker.Init()
 
-		go func() {
-			defer wg.Done()
-			worker.Work()
-		}()
+		wg.Add(shovel.Concurrency)
+
+		for i := 0; i < shovel.Concurrency; i++ {
+			worker := Worker{ShovelConfig: shovel}
+			worker.Name = fmt.Sprintf("%s [%d]", worker.Name, i+1)
+			worker.Init()
+			go func() {
+				defer wg.Done()
+				worker.Work()
+			}()
+		}
 	}
 
 	wg.Wait()

@@ -74,7 +74,6 @@ func (w *Worker) initSink() {
 func (w *Worker) Init() {
 	w.initSource()
 	w.initSink()
-	log.Println("init done")
 }
 
 // Work does the shoveling and handles reconnecting as needed.
