@@ -3,20 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"runtime"
 	"sync"
 )
-
-func OpenFile(filename string) io.Reader {
-	reader, err := os.Open(filename)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return reader
-}
 
 func main() {
 	threads := flag.Int("threads", runtime.NumCPU(), "set GOMAXPROCS")
@@ -37,7 +28,11 @@ func main() {
 
 	shovels := make([]ShovelConfig, len(files))
 	for i, f := range files {
-		shovels[i] = ParseShovel(OpenFile(f))
+		reader, err := os.Open(f)
+		if err != nil {
+			log.Fatal(err)
+		}
+		shovels[i] = ParseShovel(reader)
 	}
 
 	var wg sync.WaitGroup
@@ -58,6 +53,8 @@ func main() {
 			}()
 		}
 	}
+
+	log.Println("workers are up and running")
 
 	wg.Wait()
 }
