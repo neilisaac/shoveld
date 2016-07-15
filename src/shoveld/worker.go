@@ -33,10 +33,7 @@ func (w *Worker) initSource() {
 
 	for _, binding := range w.Source.Bindings {
 		if binding.Exchange == "" {
-			log.Fatal("exchange missing from source binding for", w.Name)
-		}
-		if binding.RoutingKey == "" {
-			log.Fatal("routing key missing from source binding for", w.Name)
+			log.Fatal("exchange missing from source binding for: ", w.Name)
 		}
 		if err := channel.QueueBind(w.Source.Queue, binding.RoutingKey, binding.Exchange, false, nil); err != nil {
 			log.Fatal(err)
