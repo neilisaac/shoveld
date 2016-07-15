@@ -59,7 +59,7 @@ func (w *Worker) initSink() {
 		log.Fatal(err)
 	}
 
-	if err := channel.ExchangeDeclare(w.Sink.Exchange, "topic", true, false, false, false, nil); err != nil {
+	if err := channel.ExchangeDeclare(w.Sink.Exchange, w.Sink.ExchangeType, true, false, false, false, nil); err != nil {
 		log.Fatal(err)
 	}
 
