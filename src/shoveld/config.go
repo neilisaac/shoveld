@@ -32,9 +32,6 @@ func (s *ShovelConfig) SetDefaults() {
 	if s.Concurrency == 0 {
 		s.Concurrency = 1
 	}
-
-	s.Source.SetDefaults()
-	s.Sink.SetDefaults()
 }
 
 // AMQPHost contains the host details required for an amqp connection
@@ -51,25 +48,6 @@ func (h AMQPHost) URI() string {
 	return fmt.Sprintf("amqp://%s:%s@%s:%d/%s", h.User, h.Password, h.Host, h.Port, url.QueryEscape(h.VHost))
 }
 
-// SetDefaults assigns default values to blank fields
-func (h *AMQPHost) SetDefaults() {
-	if h.Host == "" {
-		h.Host = "localhost"
-	}
-	if h.Port == 0 {
-		h.Port = 5672
-	}
-	if h.VHost == "" {
-		h.VHost = "/"
-	}
-	if h.User == "" {
-		h.User = "guest"
-	}
-	if h.Password == "" {
-		h.Password = "guest"
-	}
-}
-
 // ShovelSource represnets the source queue to read from.
 // Exchange is optional and indicates an exchange to which the queue should be bound.
 type ShovelSource struct {
@@ -78,15 +56,6 @@ type ShovelSource struct {
 	Bindings []ShovelSourceBinding
 	Prefetch int
 	// TODO: Transient bool
-}
-
-// SetDefaults assigns default values to blank fields
-func (s *ShovelSource) SetDefaults() {
-	s.AMQPHost.SetDefaults()
-
-	if s.Prefetch == 0 {
-		s.Prefetch = 100
-	}
 }
 
 // ShovelSourceBinding represents a single binding to feed the input queue.
@@ -98,14 +67,10 @@ type ShovelSourceBinding struct {
 // ShovelSink represents the output of the shovel.
 // RoutingKey is optional and overrides a message's routing key if specified.
 type ShovelSink struct {
-	AMQPHost   `yaml:",inline"`
-	Exchange   string
-	RoutingKey string
-}
-
-// SetDefaults assigns default values to blank fields
-func (s *ShovelSink) SetDefaults() {
-	s.AMQPHost.SetDefaults()
+	AMQPHost     `yaml:",inline"`
+	Exchange     string
+	RoutingKey   string
+	ExchangeType string
 }
 
 // ParseShovel parses a ShovelConfig from a given reader.
@@ -115,14 +80,34 @@ func ParseShovel(reader io.Reader) ShovelConfig {
 		log.Fatal(err)
 	}
 
-	shovel := ShovelConfig{}
+	shovel := ShovelConfig{
+		Name:        "", // required
+		Concurrency: 1,
+		Source: ShovelSource{
+			AMQPHost: AMQPHost{
+				Host:     "localhost",
+				Port:     5672,
+				VHost:    "/",
+				User:     "guest",
+				Password: "guest"},
+			Queue:    "", // required
+			Bindings: nil,
+			Prefetch: 100},
+		Sink: ShovelSink{
+			AMQPHost: AMQPHost{
+				Host:     "localhost",
+				Port:     5672,
+				VHost:    "/",
+				User:     "guest",
+				Password: "guest"},
+			Exchange:     "", // required
+			RoutingKey:   "",
+			ExchangeType: "topic"}}
+
 	if err := yaml.Unmarshal(bytes, &shovel); err != nil {
 		log.Fatal(err)
 	}
 
 	numShovels++
-
-	shovel.SetDefaults()
-
 	return shovel
 }
