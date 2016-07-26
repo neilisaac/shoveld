@@ -20,20 +20,6 @@ type ShovelConfig struct {
 	Sink        ShovelSink
 }
 
-// SetDefaults assigns default values to blank fields
-func (s *ShovelConfig) SetDefaults() {
-	if s.Name == "" {
-		s.Name = fmt.Sprintf("shovel%d", numShovels)
-	}
-
-	if s.Concurrency < 0 {
-		log.Fatal("negative concurrency not allowed")
-	}
-	if s.Concurrency == 0 {
-		s.Concurrency = 1
-	}
-}
-
 // AMQPHost contains the host details required for an amqp connection
 type AMQPHost struct {
 	Host     string
@@ -81,7 +67,7 @@ func ParseShovel(reader io.Reader) ShovelConfig {
 	}
 
 	shovel := ShovelConfig{
-		Name:        "", // required
+		Name:        "",
 		Concurrency: 1,
 		Source: ShovelSource{
 			AMQPHost: AMQPHost{
@@ -106,6 +92,17 @@ func ParseShovel(reader io.Reader) ShovelConfig {
 
 	if err := yaml.Unmarshal(bytes, &shovel); err != nil {
 		log.Fatal(err)
+	}
+
+	if shovel.Name == "" {
+		shovel.Name = fmt.Sprintf("shovel%d", numShovels)
+	}
+
+	if shovel.Concurrency < 0 {
+		log.Fatal("negative concurrency not allowed")
+	}
+	if shovel.Concurrency == 0 {
+		shovel.Concurrency = 1
 	}
 
 	numShovels++
