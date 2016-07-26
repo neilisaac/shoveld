@@ -14,7 +14,7 @@ go build shoveld
 
 ## configure
 
-Annotated example:
+Example:
 
 ```
 name: fancy shovel
@@ -33,6 +33,9 @@ sink:
 ```
 
 See `src/shoveld/config.go` for the complete set of options avialable.
+
+
+## run
 
 run: `shoveld example.yaml`
 
