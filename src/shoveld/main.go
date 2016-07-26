@@ -36,18 +36,16 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(len(shovels))
 
 	for _, shovel := range shovels {
 		log.Println("initializing", shovel.Name)
-
-		wg.Add(shovel.Concurrency)
 
 		for i := 0; i < shovel.Concurrency; i++ {
 			worker := Worker{ShovelConfig: shovel}
 			worker.Name = fmt.Sprintf("%s [%d]", worker.Name, i+1)
 			worker.Init()
 			go func() {
+				wg.Add(1)
 				defer wg.Done()
 				worker.Work()
 			}()
