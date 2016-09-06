@@ -104,10 +104,27 @@ func (w *Worker) doShoveling() error {
 		return err
 	}
 
-	confirms := sink.NotifyPublish(make(chan amqp.Confirmation, 1))
+	// allow up to maxPending unconfirmed publishes (to avoid deadlock scenario)
+	// see https://godoc.org/github.com/streadway/amqp#Channel.NotifyPublish
+	maxPending := int64(w.Source.Prefetch)
+	pending := make(chan bool, maxPending)
+	confirms := sink.NotifyPublish(make(chan amqp.Confirmation, maxPending))
 	if err := sink.Confirm(false); err != nil {
 		log.Fatal(err)
 	}
+
+	// asynchronously process confirms for publishes
+	go func() {
+		for confirmed := range confirms {
+			<-pending
+
+			if confirmed.Ack {
+				source.Ack(confirmed.DeliveryTag, false)
+			} else {
+				source.Nack(confirmed.DeliveryTag, false, true)
+			}
+		}
+	}()
 
 	for {
 		msg, ok := <-shovel
@@ -119,6 +136,9 @@ func (w *Worker) doShoveling() error {
 		if w.Sink.RoutingKey != "" {
 			routingKey = w.Sink.RoutingKey
 		}
+
+		// block until there's guaranteed to be room on confirms channel
+		pending <- true
 
 		err := sink.Publish(w.Sink.Exchange, routingKey, false, false, amqp.Publishing{
 			ContentType:     msg.ContentType,
@@ -137,14 +157,9 @@ func (w *Worker) doShoveling() error {
 			Body:            msg.Body})
 
 		if err != nil {
+			<-pending
 			msg.Nack(false, true)
 			log.Panic(err)
-		}
-
-		if confirmed := <-confirms; confirmed.Ack {
-			msg.Ack(false)
-		} else {
-			msg.Nack(false, true)
 		}
 	}
 }
