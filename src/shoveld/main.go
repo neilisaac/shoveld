@@ -44,11 +44,14 @@ func main() {
 			worker := Worker{ShovelConfig: shovel}
 			worker.Name = fmt.Sprintf("%s [%d]", worker.Name, i+1)
 			worker.Init()
+
 			go func() {
-				wg.Add(1)
+				defer log.Println("worker", worker.Name, "done")
 				defer wg.Done()
 				worker.Work()
 			}()
+
+			wg.Add(1)
 		}
 	}
 
